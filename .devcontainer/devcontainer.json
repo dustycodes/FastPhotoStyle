@@ -1,8 +1,8 @@
 {
-    // "image": "413491637885.dkr.ecr.eu-west-1.amazonaws.com/pytorch-image-recognizer:1.10.1_py38_i",
-    "build.dockerfile": "../Dockerfile",
-    "build.context": "../",
-    "dockerFile": "../Dockerfile",
+    "image": "stixxer/semantic-segmentation-pytorch:latest",
+    // "build.dockerfile": "../Dockerfile",
+    // "build.context": "../",
+    // "dockerFile": "../Dockerfile",
     "forwardPorts": [],
     "customizations": {
         // Configure properties specific to VS Code.
@@ -23,6 +23,6 @@
     ],
     "context": "..",
     "mounts": [
-        "type=bind,source=/media,target=/media"
+        // "type=bind,source=/media,target=/media"
     ]
 }

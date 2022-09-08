@@ -30,3 +30,5 @@ RUN conda install -y -c conda-forge scikit-umfpack
 # RUN pip install scikit-umfpack
 RUN pip install cupy-cuda91
 RUN pip install pynvrtc
+RUN pip install yacs
+RUN pip install isort black mypy
