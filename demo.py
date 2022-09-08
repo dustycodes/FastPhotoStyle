@@ -4,10 +4,14 @@ Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses
 """
 
 from __future__ import print_function
+
 import argparse
+
 import torch
+
 import process_stylization
 from photo_wct import PhotoWCT
+
 parser = argparse.ArgumentParser(description='Photorealistic Image Stylization')
 parser.add_argument('--model', default='./PhotoWCTModels/photo_wct.pth')
 parser.add_argument('--content_image_path', default='./images/content1.png')

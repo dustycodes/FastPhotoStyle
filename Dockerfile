@@ -26,7 +26,8 @@ RUN rm /tmp/Anaconda3-5.0.1-Linux-x86_64.sh -rf
 RUN conda install -y pytorch=0.4.1 torchvision cuda91 -c pytorch
 RUN conda install -y -c anaconda pip 
 RUN conda install -y -c menpo opencv3
-RUN pip install scikit-umfpack
+RUN conda install -y -c conda-forge scikit-umfpack
+# RUN pip install scikit-umfpack
 RUN pip install cupy-cuda91
 RUN pip install pynvrtc
 RUN pip install yacs
