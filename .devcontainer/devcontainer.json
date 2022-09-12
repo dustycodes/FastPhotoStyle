@@ -1,8 +1,8 @@
 {
-    "image": "stixxer/semantic-segmentation-pytorch:latest",
-    // "build.dockerfile": "../Dockerfile",
-    // "build.context": "../",
-    // "dockerFile": "../Dockerfile",
+    // "image": "stixxer/semantic-segmentation-pytorch:latest",
+    "build.dockerfile": "../Dockerfile",
+    "build.context": "../",
+    "dockerFile": "../Dockerfile",
     "forwardPorts": [],
     "customizations": {
         // Configure properties specific to VS Code.
