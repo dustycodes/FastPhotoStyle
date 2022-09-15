@@ -7,6 +7,8 @@ from __future__ import print_function
 import argparse
 import glob
 import os
+import random
+import re
 
 import cv2
 import numpy as np
@@ -15,6 +17,7 @@ from PIL import Image
 from scipy.misc import imread, imresize
 from torch import nn
 from torchvision import transforms
+from tqdm import tqdm
 
 import process_stylization_ade20k_ssn
 from photo_wct import PhotoWCT
@@ -53,7 +56,7 @@ parser.add_argument('--no_post', action='store_true', default=False)
 parser.add_argument('--output_visualization', action='store_true', default=False)
 parser.add_argument('--cuda', type=int, default=1, help='Enable CUDA.')
 parser.add_argument('--label_mapping', type=str, default='ade20k_semantic_rel.npy')
-parser.add_argument('--results_dir', type=str, default='./results')
+parser.add_argument('--results_dir', type=str, default='/media/dusty/Storage1/yolo-style')
 parser.add_argument('--percent_resized_style', type=str, default='50')
 parser.add_argument('--percent_resized_content', type=str, default='50')
 parser.add_argument('--percent_upscaled_result', type=str, default='200')
@@ -127,56 +130,95 @@ def segment_this_img(f):
     return preds
 
 
-style_files = glob.glob(f"{args.style_image_dir}/*.jpg")
-content_files = glob.glob(f"{args.content_image_dir}/*.jpg")
+def plot_one_box(x, image, color=None, label=None, line_thickness=None):
+    # Plots one bounding box on image img
+    tl = line_thickness or round(0.002 * (image.shape[0] + image.shape[1]) / 2) + 1  # line/font thickness
+    color = color or [random.randint(0, 255) for _ in range(3)]
+    c1, c2 = (int(x[0]), int(x[1])), (int(x[2]), int(x[3]))
+    cv2.rectangle(image, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
+    if label:
+        tf = max(tl - 1, 1)  # font thickness
+        t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
+        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+        cv2.rectangle(image, c1, c2, color, -1, cv2.LINE_AA)  # filled
+        cv2.putText(image, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+
+
+style_files = [f for f in glob.glob(f"{args.style_image_dir}/*.jpg")]
+content_files = [f for f in glob.glob(f"{args.content_image_dir}/**/*.jpg", recursive=True)]
 if not os.path.exists(args.results_dir):
     os.mkdir(args.results_dir)
 
 style_num = 0
 content_num = 0
-for style_image in style_files:
-    for content_image in content_files:
-        results_dir = f"{args.results_dir}/style-{style_num}-content-{content_num}"
-        if not os.path.exists(results_dir):
-            os.mkdir(results_dir)
+for style_image in tqdm(style_files, desc="Going through content style images"):
+    for content_image in tqdm(content_files, desc="Going through content images"):
+        try:
+            results_dir = f"{args.results_dir}/style-{style_num}-content-{content_num}"
+            if not os.path.exists(results_dir):
+                os.mkdir(results_dir)
 
-        content_segment_image = f"{results_dir}/content_seg.pgm"
-        style_segment_image = f"{results_dir}/style_seg.pgm"
-        output_image_path = f"{results_dir}/result-{style_num}-{content_num}.png"
-        output_image_path_upscaled = f"{results_dir}/result-upscaled.png"
-        content_resized_image_path = f"{results_dir}/content_resized.png"
-        style_resized_image_path = f"{results_dir}/style_resized.png"
+            content_segment_image = f"{results_dir}/content_seg.pgm"
+            style_segment_image = f"{results_dir}/style_seg.pgm"
+            output_image_path = f"{results_dir}/result-{style_num}-{content_num}.png"
+            output_image_path_upscaled = f"{results_dir}/result-{style_num}-{content_num}-upscaled.png"
+            output_bbox_image_path_upscaled = f"{results_dir}/result-bbox-{style_num}-{content_num}-upscaled.png"
+            content_resized_image_path = f"{results_dir}/content_resized.png"
+            style_resized_image_path = f"{results_dir}/style_resized.png"
+            yolo_file = content_image.replace(content_image.split(".")[-1], "txt")
+            yolo_file_new = f"{output_image_path_upscaled.split('/')[-1].split('.')[:-1]}.txt".replace("[", "").replace("]", "")
 
-        os.system(f"convert -resize {args.percent_resized_style}% {style_image} {style_resized_image_path}")
-        os.system(f"convert -resize {args.percent_resized_style}% {content_image} {content_resized_image_path}")
-        os.system(f"cp {style_image} {results_dir}/{style_image.split('/')[-1]}")
-        os.system(f"cp {content_image} {results_dir}/{content_image.split('/')[-1]}")
+            if os.path.exists(output_bbox_image_path_upscaled):
+                continue
 
-        cont_seg = segment_this_img(content_resized_image_path)
-        cv2.imwrite(content_segment_image, cont_seg)
-        style_seg = segment_this_img(style_resized_image_path)
-        cv2.imwrite(style_segment_image, style_seg)
-        process_stylization_ade20k_ssn.stylization(
-            stylization_module=p_wct,
-            smoothing_module=p_pro,
-            content_image_path=content_resized_image_path,
-            style_image_path=style_resized_image_path,
-            content_seg_path=content_segment_image,
-            style_seg_path=style_segment_image,
-            output_image_path=output_image_path,
-            cuda=True,
-            save_intermediate=args.save_intermediate,
-            no_post=args.no_post,
-            label_remapping=segReMapping,
-            output_visualization=args.output_visualization
-        )
-        with Image.open(content_image) as og_im:
-            og_width, og_height = og_im.size
+            os.system(f"convert -resize {args.percent_resized_style}% {style_image} {style_resized_image_path}")
+            os.system(f"convert -resize {args.percent_resized_style}% {content_image} {content_resized_image_path}")
+            os.system(f"cp {style_image} {results_dir}/{style_image.split('/')[-1]}")
+            os.system(f"cp {content_image} {results_dir}/{content_image.split('/')[-1]}")
 
-        with Image.open(output_image_path) as res_im:
-            d = res_im.resize((og_width, og_height), resample=Image.BILINEAR)
-            d.save(output_image_path_upscaled)
+            cont_seg = segment_this_img(content_resized_image_path)
+            cv2.imwrite(content_segment_image, cont_seg)
+            style_seg = segment_this_img(style_resized_image_path)
+            cv2.imwrite(style_segment_image, style_seg)
+            process_stylization_ade20k_ssn.stylization(
+                stylization_module=p_wct,
+                smoothing_module=p_pro,
+                content_image_path=content_resized_image_path,
+                style_image_path=style_resized_image_path,
+                content_seg_path=content_segment_image,
+                style_seg_path=style_segment_image,
+                output_image_path=output_image_path,
+                cuda=True,
+                save_intermediate=args.save_intermediate,
+                no_post=args.no_post,
+                label_remapping=segReMapping,
+                output_visualization=args.output_visualization
+            )
+            with Image.open(content_image) as og_im:
+                og_width, og_height = og_im.size
 
-        content_num += 1
+            with Image.open(output_image_path) as res_im:
+                d = res_im.resize((og_width, og_height), resample=Image.BILINEAR)
+                d.save(output_image_path_upscaled)
+            
+            os.system(f"cp {yolo_file} {results_dir}/{yolo_file_new}")
+            with open(yolo_file) as file:
+                yolo_data = file.read()
+
+            yolo_data = yolo_data.split()
+            x_center, y_center, w, h = float(yolo_data[1])*og_width, float(yolo_data[2])*og_height, float(yolo_data[3])*og_width, float(yolo_data[4])*og_height
+            x1 = round(x_center-w/2)
+            y1 = round(y_center-h/2)
+            x2 = round(x_center+w/2)
+            y2 = round(y_center+h/2)
+            bbox_image = cv2.imread(output_image_path_upscaled)
+            plot_one_box([x1,y1,x2,y2], bbox_image, color=[255, 0, 0], label="drone", line_thickness=None)
+
+            cv2.imwrite(output_bbox_image_path_upscaled, bbox_image) 
+
+            content_num += 1
+        except Exception as ex:
+            print(ex)
+            content_num += 1
     
     style_num += 1

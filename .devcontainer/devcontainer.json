@@ -23,6 +23,6 @@
     ],
     "context": "..",
     "mounts": [
-        // "type=bind,source=/media,target=/media"
+        "type=bind,source=/media,target=/media"
     ]
 }
